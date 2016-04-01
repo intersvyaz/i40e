@@ -28,15 +28,11 @@ ifeq (,$(BUILD_KERNEL))
 BUILD_KERNEL=$(shell uname -r)
 endif
 
-ifeq (,$(wildcard build.mk))
-	DRIVERS :=  $(shell ls -ld i40e* | awk '/^d/ { print $$9 }')
-else
-	DRIVERS :=  $(shell ls -ld i40e i40evf | awk '/^d/ { print $$9 }')
-endif
-DIRS :=  $(patsubst %,%/,$(DRIVERS))
-SOURCES := $(shell find $(DRIVERS) -name "*.[ch]" | grep -v "\.mod\.c")
+DRIVERS := i40e
+REALDIR := $(realpath $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST)))))
+SOURCES := $(shell find $(REALDIR) -name "*.[ch]" | grep -v "\.mod\.c")
 MODULES := $(patsubst %,%.ko,$(DRIVERS))
-TARGETS := $(join $(DIRS), $(MODULES))
+TARGETS := $(join $(REALDIR), $(MODULES))
 MANFILES := $(patsubst %,%.7,$(DRIVERS))
 MANFILES := $(patsubst %,../%,$(MANFILES))
 ###########################################################################
@@ -223,58 +219,47 @@ kernelbuild = $(shell (\
 # output of the shell.
 
 $(MODULES): $(TARGETS)
-	@cp $(TARGETS) .
 
 $(TARGETS): $(SOURCES)
-	@for s in $(DRIVERS) ; do \
-		export REAL_CC=$(CC); \
-		if [ -n "$(KOBJ)" ]; then \
-			$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s modules ; \
-		else \
-			$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) -O $(KOBJ) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s modules ; \
-		fi ; \
-	done
+	export REAL_CC=$(CC); \
+	if [ -n "$(KOBJ)" ]; then \
+		$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) modules ; \
+	else \
+		$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) -O $(KOBJ) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) modules ; \
+	fi ; \
 
 noisy: $(SOURCES)
-	@for s in $(DRIVERS) ; do \
-		export REAL_CC=$(CC); \
-		if [ -n "$(KOBJ)" ]; then \
-			$(MAKE) -C $(KSRC) $(ISYS_OPTS) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s V=1 modules ; \
-		else \
-			$(MAKE) -C $(KSRC) -O $(KOBJ) $(ISYS_OPTS) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s V=1 modules ; \
-		fi ; \
-	done
-	@cp $(TARGETS) .
+	export REAL_CC=$(CC); \
+	if [ -n "$(KOBJ)" ]; then \
+		$(MAKE) -C $(KSRC) $(ISYS_OPTS) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) V=1 modules ; \
+	else \
+		$(MAKE) -C $(KSRC) -O $(KOBJ) $(ISYS_OPTS) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) V=1 modules ; \
+	fi ; \
 
 silent: $(SOURCES)
-	$(foreach d, $(DRIVERS), $(call kernelbuild,$(d),modules))
-	@cp $(TARGETS) .
+	$(call kernelbuild,$(REALDIR),modules))
 
 sparse: clean $(SOURCES)
-	@for s in $(DRIVERS) ; do \
-		export REAL_CC=$(CC); \
-		if [ -n "$(KOBJ)" ]; then \
-			$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s C=2 CF="-D__CHECK_ENDIAN__ -Wbitwise -Wcontext" modules ; \
-		else \
-			$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) -O $(KOBJ) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s C=2 CF="-D__CHECK_ENDIAN_ -Wbitwise -Wcontext" modules ; \
-		fi ; \
-	done
+	export REAL_CC=$(CC); \
+	if [ -n "$(KOBJ)" ]; then \
+		$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) C=2 CF="-D__CHECK_ENDIAN__ -Wbitwise -Wcontext" modules ; \
+	else \
+		$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) -O $(KOBJ) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) C=2 CF="-D__CHECK_ENDIAN_ -Wbitwise -Wcontext" modules ; \
+	fi ; \
 
 ccc: clean $(SOURCES)
-	@for s in $(DRIVERS) ; do \
-		export REAL_CC=$(CC); \
-		if [ -n "$(KOBJ)" ]; then \
-			$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s coccicheck MODE=report; \
-		else \
-			$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) -O $(KOBJ) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=`pwd`/$$s coccicheck MODE=report; \
-		fi ; \
-	done
+	export REAL_CC=$(CC); \
+	if [ -n "$(KOBJ)" ]; then \
+		$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) coccicheck MODE=report; \
+	else \
+		$(MAKE) $(ISYS_OPTS) ccflags-y+="$(CFLAGS_EXTRA)" -C $(KSRC) -O $(KOBJ) CONFIG_I40E=m CONFIG_I40EVF=m SUBDIRS=$(REALDIR) coccicheck MODE=report; \
+	fi ; \
 
 manfile:
-	$(foreach m, $(DRIVERS), $(shell gzip -c ../$(m).$(MANSECTION) > $(m).$(MANSECTION).gz))
+	$(foreach m, $(DRIVERS), $(shell gzip -c $(m).$(MANSECTION) > $(m).$(MANSECTION).gz))
 
 clean:
-	$(foreach d, $(DRIVERS), $(call kernelbuild,$(d),clean))
+	$(call kernelbuild,$(REALDIR),clean)
 	@-rm -rf *.$(MANSECTION).gz *.ko
 
 install: $(MODULES) manfile

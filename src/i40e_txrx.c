@@ -28,6 +28,10 @@
 #include "i40e.h"
 #include "i40e_prototype.h"
 
+#if defined(CONFIG_NETMAP) || defined (CONFIG_NETMAP_MODULE)
+#include <i40e_netmap_linux.h>
+#endif /* DEV_NETMAP */
+
 static inline __le64 build_ctob(u32 td_cmd, u32 td_offset, unsigned int size,
 				u32 td_tag)
 {
@@ -648,6 +652,11 @@ static bool i40e_clean_tx_irq(struct i40e_ring *tx_ring, int budget)
 	struct i40e_tx_desc *tx_desc;
 	unsigned int total_packets = 0;
 	unsigned int total_bytes = 0;
+
+#ifdef DEV_NETMAP
+	if (netmap_tx_irq(tx_ring->netdev, tx_ring->queue_index) != NM_IRQ_PASS)
+		return true;
+#endif /* DEV_NETMAP */
 
 	tx_buf = &tx_ring->tx_bi[i];
 	tx_desc = I40E_TX_DESC(tx_ring, i);
@@ -2290,6 +2299,14 @@ int i40e_napi_poll(struct napi_struct *napi, int budget)
 	budget_per_ring = max(budget/q_vector->num_ringpairs, 1);
 
 	i40e_for_each_ring(ring, q_vector->rx) {
+#ifdef DEV_NETMAP
+		int dummy, nm_irq;
+		nm_irq = netmap_rx_irq(vsi->netdev, ring->queue_index, &dummy);
+		if (nm_irq != NM_IRQ_PASS) {
+			clean_complete &= (nm_irq == NM_IRQ_COMPLETED);
+			continue;
+		}
+#endif /* DEV_NETMAP */
 
 		if (ring_is_ps_enabled(ring))
 			cleaned = i40e_clean_rx_irq_ps(ring, budget_per_ring);
